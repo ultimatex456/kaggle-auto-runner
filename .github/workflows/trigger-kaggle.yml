@@ -1,4 +1,4 @@
-name: Push and Trigger Kaggle
+name: Kaggle Auto Runner
 
 on:
   repository_dispatch:
@@ -8,119 +8,109 @@ on:
 jobs:
   push-to-kaggle:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     steps:
+      # ── Step 1: Checkout ──────────────────────────────────
       - name: Checkout Repository
         uses: actions/checkout@v4
         with:
           token: ${{ secrets.GH_PAT }}
 
+      # ── Step 2: Setup Python ──────────────────────────────
       - name: Setup Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.11'
 
-      - name: Install Kaggle
-        run: pip install kaggle
+      # ── Step 3: Install packages ──────────────────────────
+      - name: Install Dependencies
+        run: pip install kaggle requests
 
-      # ── Verify secrets are set ──────────────────────────────
+      # ── Step 4: Verify secrets ────────────────────────────
       - name: Verify Secrets
         run: |
-          if [ -z "${{ secrets.KAGGLE_USERNAME }}" ]; then
-            echo "❌ KAGGLE_USERNAME secret is empty!"
+          echo "Checking secrets..."
+          if [ -z "$KAGGLE_USERNAME" ]; then
+            echo "❌ KAGGLE_USERNAME is empty!"
             exit 1
           fi
-          if [ -z "${{ secrets.KAGGLE_KEY }}" ]; then
-            echo "❌ KAGGLE_KEY secret is empty!"
+          if [ -z "$KAGGLE_KEY" ]; then
+            echo "❌ KAGGLE_KEY is empty!"
             exit 1
           fi
-          echo "✅ Secrets verified"
-          echo "Username length: ${#KAGGLE_USERNAME}"
-          echo "Key length: ${#KAGGLE_KEY}"
+          echo "✅ All secrets verified"
         env:
           KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
-          KAGGLE_KEY: ${{ secrets.KAGGLE_KEY }}
+          KAGGLE_KEY     : ${{ secrets.KAGGLE_KEY }}
 
-      # ── Setup Kaggle credentials ────────────────────────────
+      # ── Step 5: Setup Kaggle auth ─────────────────────────
       - name: Setup Kaggle Auth
         run: |
           mkdir -p ~/.kaggle
           cat > ~/.kaggle/kaggle.json << EOF
           {
             "username": "${{ secrets.KAGGLE_USERNAME }}",
-            "key": "${{ secrets.KAGGLE_KEY }}"
+            "key"     : "${{ secrets.KAGGLE_KEY }}"
           }
           EOF
           chmod 600 ~/.kaggle/kaggle.json
-          echo "✅ Kaggle credentials configured"
-          cat ~/.kaggle/kaggle.json
+          echo "✅ Kaggle auth configured"
 
-      # ── Test Kaggle auth before pushing ────────────────────
-      - name: Test Kaggle Auth
-        run: |
-          echo "🔐 Testing Kaggle authentication..."
-          kaggle kernels list --mine --page-size 1
-          echo "✅ Kaggle auth working!"
-
-      # ── Update metadata with correct username ───────────────
+      # ── Step 6: Update metadata ───────────────────────────
       - name: Update Kernel Metadata
         run: |
           python3 << 'EOF'
-          import json
+          import json, os
 
           with open('kernel/kernel-metadata.json', 'r') as f:
               metadata = json.load(f)
 
-          import os
           username    = os.environ['KAGGLE_USERNAME']
           kernel_name = os.environ['KERNEL_NAME']
-
           metadata['id'] = f"{username}/{kernel_name}"
-          print(f"✅ Kernel ID set to: {metadata['id']}")
 
           with open('kernel/kernel-metadata.json', 'w') as f:
               json.dump(metadata, f, indent=2)
 
-          print("✅ Metadata updated!")
-          print(json.dumps(metadata, indent=2))
+          print(f"✅ Kernel ID: {metadata['id']}")
           EOF
         env:
           KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
-          KERNEL_NAME: ${{ secrets.KERNEL_NAME }}
+          KERNEL_NAME    : ${{ secrets.KERNEL_NAME }}
 
-      # ── Push kernel to Kaggle ───────────────────────────────
+      # ── Step 7: Test Kaggle auth ──────────────────────────
+      - name: Test Kaggle Auth
+        run: |
+          echo "🔐 Testing Kaggle auth..."
+          kaggle kernels list --mine --page-size 1
+          echo "✅ Auth working!"
+
+      # ── Step 8: Push kernel ───────────────────────────────
       - name: Push Kernel to Kaggle
         run: |
           echo "📤 Pushing kernel..."
-          echo "Kernel folder contents:"
-          ls -la ./kernel/
-          echo ""
-          echo "Metadata:"
-          cat ./kernel/kernel-metadata.json
-          echo ""
           kaggle kernels push -p ./kernel
           echo "✅ Kernel pushed!"
 
-      # ── Check status ────────────────────────────────────────
+      # ── Step 9: Check status ──────────────────────────────
       - name: Check Kernel Status
         run: |
           sleep 20
-          echo "📊 Status:"
+          echo "📊 Kernel status:"
           kaggle kernels status \
             ${{ secrets.KAGGLE_USERNAME }}/${{ secrets.KERNEL_NAME }}
-        env:
-          KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
 
-      # ── Update tracker ──────────────────────────────────────
+      # ── Step 10: Update tracker ───────────────────────────
       - name: Update Usage Tracker
         run: python scripts/trigger.py
         env:
           KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
-          KAGGLE_KEY: ${{ secrets.KAGGLE_KEY }}
-          KERNEL_NAME: ${{ secrets.KERNEL_NAME }}
+          KAGGLE_KEY     : ${{ secrets.KAGGLE_KEY }}
+          KERNEL_NAME    : ${{ secrets.KERNEL_NAME }}
 
-      # ── Save tracker ────────────────────────────────────────
-      - name: Commit Tracker Update
+      # ── Step 11: Commit tracker ───────────────────────────
+      - name: Save Usage Tracker
         run: |
           git config user.name  "GitHub Actions Bot"
           git config user.email "actions@github.com"
