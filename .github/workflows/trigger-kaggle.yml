@@ -1,0 +1,63 @@
+name: Kaggle Auto Runner
+
+on:
+  # ── n8n triggers this via API ──────────────────────────────────────────────
+  repository_dispatch:
+    types: [trigger-kaggle]
+
+  # ── Manual trigger from GitHub UI ─────────────────────────────────────────
+  workflow_dispatch:
+    inputs:
+      force_run:
+        description: 'Force run ignoring limits'
+        required: false
+        default: 'false'
+
+jobs:
+  trigger-kaggle:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      # ── Checkout repo ────────────────────────────────────────────────────
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GH_PAT }}
+
+      # ── Setup Python ─────────────────────────────────────────────────────
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      # ── Install dependencies ──────────────────────────────────────────────
+      - name: Install Dependencies
+        run: |
+          pip install kaggle requests
+
+      # ── Check limits & trigger ────────────────────────────────────────────
+      - name: Check Limits & Trigger Kaggle
+        env:
+          KAGGLE_USERNAME : ${{ secrets.KAGGLE_USERNAME }}
+          KAGGLE_KEY      : ${{ secrets.KAGGLE_KEY }}
+          KERNEL_NAME     : ${{ secrets.KERNEL_NAME }}
+          FORCE_RUN       : ${{ github.event.inputs.force_run }}
+        run: |
+          python scripts/trigger.py
+
+      # ── Commit updated tracker ────────────────────────────────────────────
+      - name: Save Usage Tracker
+        run: |
+          git config user.name  "GitHub Actions Bot"
+          git config user.email "actions@github.com"
+          git add tracker/usage.json
+          git diff --staged --quiet || git commit -m "📊 Update usage tracker [skip ci]"
+          git push
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_PAT }}
+
+      # ── Print status summary ──────────────────────────────────────────────
+      - name: Print Status
+        run: |
+          python scripts/status.py
