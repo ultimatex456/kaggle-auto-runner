@@ -1,0 +1,19 @@
+{
+  "weekly": {
+    "runs": 0,
+    "hours": 0,
+    "week_start": "",
+    "max_runs": 4,
+    "max_hours": 24
+  },
+  "monthly": {
+    "runs": 0,
+    "hours": 0,
+    "month_start": "",
+    "max_runs": 15,
+    "max_hours": 90
+  },
+  "last_run": "",
+  "total_runs": 0,
+  "history": []
+}
