@@ -11,20 +11,24 @@ jobs:
     timeout-minutes: 30
 
     steps:
+      # ── Step 1: Checkout ──────────────────────────────────
       - name: Checkout Repository
         uses: actions/checkout@v4
         with:
           token: ${{ secrets.GH_PAT }}
 
+      # ── Step 2: Setup Python ──────────────────────────────
       - name: Setup Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.11'
 
+      # ── Step 3: Install Dependencies ─────────────────────
       - name: Install Dependencies
         run: |
           pip install kaggle requests
 
+      # ── Step 4: Verify Secrets ────────────────────────────
       - name: Verify Secrets
         run: |
           echo "Checking secrets..."
@@ -41,6 +45,7 @@ jobs:
           KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
           KAGGLE_KEY: ${{ secrets.KAGGLE_KEY }}
 
+      # ── Step 5: Setup Kaggle Auth ─────────────────────────
       - name: Setup Kaggle Auth
         run: |
           mkdir -p ~/.kaggle
@@ -51,6 +56,7 @@ jobs:
           chmod 600 ~/.kaggle/kaggle.json
           echo "Kaggle auth done"
 
+      # ── Step 6: Update Kernel Metadata ───────────────────
       - name: Update Kernel Metadata
         run: |
           python3 -c "
@@ -66,29 +72,83 @@ jobs:
           KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
           KERNEL_NAME: ${{ secrets.KERNEL_NAME }}
 
+      # ── Step 7: Test Kaggle Auth ──────────────────────────
       - name: Test Kaggle Auth
         run: |
           echo "Testing Kaggle auth..."
           kaggle kernels list --mine --page-size 1
           echo "Auth OK"
 
+      # ── Step 8: Push Kernel to Kaggle ────────────────────
       - name: Push Kernel to Kaggle
         run: |
           echo "Pushing kernel..."
           kaggle kernels push -p ./kernel
-          echo "Kernel pushed"
+          echo "Kernel pushed successfully"
 
+      # ── Step 9: Check Kernel Status ──────────────────────
       - name: Check Kernel Status
         run: |
           sleep 20
-          kaggle kernels status ${{ secrets.KAGGLE_USERNAME }}/${{ secrets.KERNEL_NAME }}
+          echo "Checking kernel status..."
+          kaggle kernels status \
+            ${{ secrets.KAGGLE_USERNAME }}/${{ secrets.KERNEL_NAME }}
+          echo "Done"
 
+      # ── Step 10: Update Usage Tracker ────────────────────
+      - name: Update Usage Tracker
+        run: |
+          python3 -c "
+          import json, os
+          from datetime import datetime
+
+          tracker_file = 'tracker/usage.json'
+
+          with open(tracker_file, 'r') as f:
+              data = json.load(f)
+
+          now     = datetime.utcnow()
+          now_str = now.strftime('%Y-%m-%d %H:%M:%S')
+
+          # Update counters
+          data['weekly']['runs']   += 1
+          data['weekly']['hours']  += 6
+          data['monthly']['runs']  += 1
+          data['monthly']['hours'] += 6
+          data['last_run']          = now_str
+          data['total_runs']       += 1
+
+          # Save history
+          data['history'].append({
+              'run'   : data['total_runs'],
+              'time'  : now_str,
+              'hours' : 6
+          })
+
+          # Keep last 100
+          if len(data['history']) > 100:
+              data['history'] = data['history'][-100:]
+
+          with open(tracker_file, 'w') as f:
+              json.dump(data, f, indent=2)
+
+          print('Tracker updated:')
+          print('  Total Runs    : ' + str(data['total_runs']))
+          print('  Weekly Runs   : ' + str(data['weekly']['runs']))
+          print('  Weekly Hours  : ' + str(data['weekly']['hours']))
+          print('  Monthly Runs  : ' + str(data['monthly']['runs']))
+          print('  Monthly Hours : ' + str(data['monthly']['hours']))
+          print('  Last Run      : ' + now_str)
+          "
+
+      # ── Step 11: Save Tracker to GitHub ──────────────────
       - name: Save Usage Tracker
         run: |
-          git config user.name "GitHub Actions Bot"
+          git config user.name  "GitHub Actions Bot"
           git config user.email "actions@github.com"
           git add tracker/usage.json
-          git diff --staged --quiet || git commit -m "Update usage tracker [skip ci]"
+          git diff --staged --quiet || \
+          git commit -m "Update usage tracker - Run #$(date +%Y%m%d%H%M%S) [skip ci]"
           git push
         env:
           GITHUB_TOKEN: ${{ secrets.GH_PAT }}
