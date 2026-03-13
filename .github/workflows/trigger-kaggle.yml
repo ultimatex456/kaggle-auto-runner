@@ -11,112 +11,84 @@ jobs:
     timeout-minutes: 30
 
     steps:
-      # ── Step 1: Checkout ──────────────────────────────────
       - name: Checkout Repository
         uses: actions/checkout@v4
         with:
           token: ${{ secrets.GH_PAT }}
 
-      # ── Step 2: Setup Python ──────────────────────────────
       - name: Setup Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.11'
 
-      # ── Step 3: Install packages ──────────────────────────
       - name: Install Dependencies
-        run: pip install kaggle requests
+        run: |
+          pip install kaggle requests
 
-      # ── Step 4: Verify secrets ────────────────────────────
       - name: Verify Secrets
         run: |
           echo "Checking secrets..."
           if [ -z "$KAGGLE_USERNAME" ]; then
-            echo "❌ KAGGLE_USERNAME is empty!"
+            echo "KAGGLE_USERNAME is empty"
             exit 1
           fi
           if [ -z "$KAGGLE_KEY" ]; then
-            echo "❌ KAGGLE_KEY is empty!"
+            echo "KAGGLE_KEY is empty"
             exit 1
           fi
-          echo "✅ All secrets verified"
+          echo "All secrets OK"
         env:
           KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
-          KAGGLE_KEY     : ${{ secrets.KAGGLE_KEY }}
+          KAGGLE_KEY: ${{ secrets.KAGGLE_KEY }}
 
-      # ── Step 5: Setup Kaggle auth ─────────────────────────
       - name: Setup Kaggle Auth
         run: |
           mkdir -p ~/.kaggle
-          cat > ~/.kaggle/kaggle.json << EOF
-          {
+          echo '{
             "username": "${{ secrets.KAGGLE_USERNAME }}",
-            "key"     : "${{ secrets.KAGGLE_KEY }}"
-          }
-          EOF
+            "key": "${{ secrets.KAGGLE_KEY }}"
+          }' > ~/.kaggle/kaggle.json
           chmod 600 ~/.kaggle/kaggle.json
-          echo "✅ Kaggle auth configured"
+          echo "Kaggle auth done"
 
-      # ── Step 6: Update metadata ───────────────────────────
       - name: Update Kernel Metadata
         run: |
-          python3 << 'EOF'
+          python3 -c "
           import json, os
-
-          with open('kernel/kernel-metadata.json', 'r') as f:
-              metadata = json.load(f)
-
-          username    = os.environ['KAGGLE_USERNAME']
-          kernel_name = os.environ['KERNEL_NAME']
-          metadata['id'] = f"{username}/{kernel_name}"
-
-          with open('kernel/kernel-metadata.json', 'w') as f:
-              json.dump(metadata, f, indent=2)
-
-          print(f"✅ Kernel ID: {metadata['id']}")
-          EOF
+          with open('kernel/kernel-metadata.json','r') as f:
+              m = json.load(f)
+          m['id'] = os.environ['KAGGLE_USERNAME'] + '/' + os.environ['KERNEL_NAME']
+          with open('kernel/kernel-metadata.json','w') as f:
+              json.dump(m, f, indent=2)
+          print('Kernel ID set to: ' + m['id'])
+          "
         env:
           KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
-          KERNEL_NAME    : ${{ secrets.KERNEL_NAME }}
+          KERNEL_NAME: ${{ secrets.KERNEL_NAME }}
 
-      # ── Step 7: Test Kaggle auth ──────────────────────────
       - name: Test Kaggle Auth
         run: |
-          echo "🔐 Testing Kaggle auth..."
+          echo "Testing Kaggle auth..."
           kaggle kernels list --mine --page-size 1
-          echo "✅ Auth working!"
+          echo "Auth OK"
 
-      # ── Step 8: Push kernel ───────────────────────────────
       - name: Push Kernel to Kaggle
         run: |
-          echo "📤 Pushing kernel..."
+          echo "Pushing kernel..."
           kaggle kernels push -p ./kernel
-          echo "✅ Kernel pushed!"
+          echo "Kernel pushed"
 
-      # ── Step 9: Check status ──────────────────────────────
       - name: Check Kernel Status
         run: |
           sleep 20
-          echo "📊 Kernel status:"
-          kaggle kernels status \
-            ${{ secrets.KAGGLE_USERNAME }}/${{ secrets.KERNEL_NAME }}
+          kaggle kernels status ${{ secrets.KAGGLE_USERNAME }}/${{ secrets.KERNEL_NAME }}
 
-      # ── Step 10: Update tracker ───────────────────────────
-      - name: Update Usage Tracker
-        run: python scripts/trigger.py
-        env:
-          KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
-          KAGGLE_KEY     : ${{ secrets.KAGGLE_KEY }}
-          KERNEL_NAME    : ${{ secrets.KERNEL_NAME }}
-
-      # ── Step 11: Commit tracker ───────────────────────────
       - name: Save Usage Tracker
         run: |
-          git config user.name  "GitHub Actions Bot"
+          git config user.name "GitHub Actions Bot"
           git config user.email "actions@github.com"
           git add tracker/usage.json
-          git diff --staged --quiet || \
-          git commit -m "📊 Update usage tracker [skip ci]"
+          git diff --staged --quiet || git commit -m "Update usage tracker [skip ci]"
           git push
         env:
           GITHUB_TOKEN: ${{ secrets.GH_PAT }}
