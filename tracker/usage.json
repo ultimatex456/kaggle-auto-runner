@@ -1,20 +1,20 @@
 {
   "weekly": {
-    "runs": 16,
-    "hours": 96,
+    "runs": 17,
+    "hours": 102,
     "week_start": "",
     "max_runs": 4,
     "max_hours": 24
   },
   "monthly": {
-    "runs": 16,
-    "hours": 96,
+    "runs": 17,
+    "hours": 102,
     "month_start": "",
     "max_runs": 15,
     "max_hours": 90
   },
-  "last_run": "2026-04-12 12:30:34",
-  "total_runs": 16,
+  "last_run": "2026-04-14 12:30:36",
+  "total_runs": 17,
   "history": [
     {
       "run": 1,
@@ -94,6 +94,11 @@
     {
       "run": 16,
       "time": "2026-04-12 12:30:34",
+      "hours": 6
+    },
+    {
+      "run": 17,
+      "time": "2026-04-14 12:30:36",
       "hours": 6
     }
   ]
