@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 KAGGLE BOT - SAFE AUTOMATED RUNNER
-Anti-Sleep | Anti-Disconnect | 6 Hour Runtime | Auto-Shutdown
+Anti-Sleep | Anti-Disconnect | 4 Hour Runtime | Auto-Shutdown
 """
 
 import os
@@ -15,7 +15,7 @@ import random
 from datetime import datetime, timedelta
 
 SCRIPT_FILE_ID      = "1xqp8vWaWqnIygHZUjjNmE7Umn-WP8g46"
-MAX_RUNTIME_HOURS   = 6
+MAX_RUNTIME_HOURS   = 4
 MAX_RUNTIME_SECONDS = MAX_RUNTIME_HOURS * 60 * 60
 START_TIME          = time.time()
 
@@ -61,7 +61,7 @@ class KeepAliveSystem:
 
             if remaining <= 0:
                 print("\n" + "=" * 70)
-                print("[TIME] 6 hours reached - Auto shutdown")
+                print("[TIME] 4 hours reached - Auto shutdown")
                 print("=" * 70)
                 self.running = False
                 os._exit(0)
@@ -89,7 +89,7 @@ class KeepAliveSystem:
         self.thread.start()
         print("[OK] Anti-Sleep      : ACTIVE")
         print("[OK] Anti-Disconnect : ACTIVE")
-        print("[OK] Auto-Shutdown   : ACTIVE (6 hours)")
+        print("[OK] Auto-Shutdown   : ACTIVE (4 hours)")
         print()
 
     def stop(self):
