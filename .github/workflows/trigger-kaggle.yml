@@ -5,83 +5,59 @@ on:
     types: [trigger-kaggle]
   workflow_dispatch:
 
+concurrency:
+  group: kaggle-push
+  cancel-in-progress: false
+
 jobs:
   push-to-kaggle:
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
     steps:
-      # ── Step 1: Checkout ──────────────────────────────────
-      - name: Checkout Repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      # ── Step 2: Setup Python ──────────────────────────────
-      - name: Setup Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
-      # ── Step 3: Install Dependencies ─────────────────────
       - name: Install Dependencies
-        run: |
-          pip install kaggle requests
+        run: pip install -r requirements.txt
 
-      # ── Step 4: Verify Secrets ────────────────────────────
-      - name: Verify Secrets
-        run: |
-          echo "Checking secrets..."
-          if [ -z "$KAGGLE_USERNAME" ]; then
-            echo "KAGGLE_USERNAME is empty"
-            exit 1
-          fi
-          if [ -z "$KAGGLE_KEY" ]; then
-            echo "KAGGLE_KEY is empty"
-            exit 1
-          fi
-          echo "All secrets OK"
-        env:
-          KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
-          KAGGLE_KEY: ${{ secrets.KAGGLE_KEY }}
+      - name: Verify Kaggle Works
+        run: python -c "from kaggle.api.kaggle_api_extended import KaggleApi; print('OK')"
 
-      # ── Step 5: Setup Kaggle Auth ─────────────────────────
       - name: Setup Kaggle Auth
         run: |
           mkdir -p ~/.kaggle
-          echo '{
-            "username": "${{ secrets.KAGGLE_USERNAME }}",
-            "key": "${{ secrets.KAGGLE_KEY }}"
-          }' > ~/.kaggle/kaggle.json
-          chmod 600 ~/.kaggle/kaggle.json
-          echo "Kaggle auth done"
+          python3 -c "
+          import json, os
+          with open(os.path.expanduser('~/.kaggle/kaggle.json'), 'w') as f:
+              json.dump({'username': os.environ['U'], 'key': os.environ['K']}, f)
+          os.chmod(os.path.expanduser('~/.kaggle/kaggle.json'), 0o600)
+          "
+        env:
+          U: ${{ secrets.KAGGLE_USERNAME }}
+          K: ${{ secrets.KAGGLE_KEY }}
 
-      # ── Step 6: Update Kernel Metadata ───────────────────
       - name: Update Kernel Metadata
         run: |
           python3 -c "
           import json, os
-          with open('kernel/kernel-metadata.json','r') as f:
+          with open('kernel/kernel-metadata.json') as f:
               m = json.load(f)
-          m['id'] = os.environ['KAGGLE_USERNAME'] + '/' + os.environ['KERNEL_NAME']
-          with open('kernel/kernel-metadata.json','w') as f:
+          m['id'] = os.environ['U'] + '/' + os.environ['N']
+          with open('kernel/kernel-metadata.json', 'w') as f:
               json.dump(m, f, indent=2)
-          print('Kernel ID set to: ' + m['id'])
           "
         env:
-          KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
-          KERNEL_NAME: ${{ secrets.KERNEL_NAME }}
+          U: ${{ secrets.KAGGLE_USERNAME }}
+          N: ${{ secrets.KERNEL_NAME }}
 
-      # ── Step 7: Push Kernel to Kaggle ────────────────────
-      - name: Push Kernel to Kaggle
-        run: |
-          echo "Pushing kernel..."
-          kaggle kernels push -p ./kernel
-          echo "Kernel pushed successfully"
+      - name: Push Kernel
+        run: kaggle kernels push -p ./kernel
 
-      # ── Step 8: Check Kernel Status ──────────────────────
-      - name: Check Kernel Status
+      - name: Check Status
         run: |
           sleep 15
-          echo "Checking kernel status..."
-          kaggle kernels status \
-            ${{ secrets.KAGGLE_USERNAME }}/${{ secrets.KERNEL_NAME }}
-          echo "Done"
+          kaggle kernels status ${{ secrets.KAGGLE_USERNAME }}/${{ secrets.KERNEL_NAME }}
